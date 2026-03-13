@@ -65,12 +65,11 @@ function getSeverity(data, section) {
   switch (section) {
     case "FAILED_JOBS": {
       const failed = parseInt(r.FAILED_JOBS_FAILED || "0");
-      const total = parseInt(r.FAILED_JOBS_TOTAL || "0");
+      const sysErrors = parseInt(r.FAILED_JOBS_SYSTEM_ERRORS || "0");
       if (r.FAILED_JOBS_STATUS === "ERROR") return "error";
-      if (failed === 0) return "ok";
-      if (total > 0 && failed / total > 0.3) return "critical";
       if (failed > 5) return "critical";
       if (failed > 0) return "warning";
+      if (sysErrors > 50) return "warning";
       return "ok";
     }
     case "HUNG_JOBS": {
@@ -104,6 +103,7 @@ function getSeverity(data, section) {
     }
     case "VAULT_TAPES": {
       if (r.VAULT_TAPES_STATUS === "ERROR") return "error";
+      if (r.VAULT_TAPES_STATUS === "NA") return "ok";
       const sev = r.VAULT_TAPES_SCRATCH_SEVERITY;
       if (sev === "CRITICAL") return "critical";
       if (sev === "WARNING") return "warning";
@@ -197,10 +197,15 @@ function SectionDetail({ data, section }) {
       rows.push(row("Successful (sev 0)", r.FAILED_JOBS_SUCCESS || "—", SEV_COLORS.ok));
       rows.push(row("Info (sev 2-4)", r.FAILED_JOBS_INFO || r.FAILED_JOBS_INFO_EVENTS || "—", "#556677"));
       rows.push(row("Warning (sev 8)", r.FAILED_JOBS_WARNING || r.FAILED_JOBS_PARTIAL || "—", parseInt(r.FAILED_JOBS_WARNING || r.FAILED_JOBS_PARTIAL || "0") > 0 ? SEV_COLORS.warning : "#ddeeff"));
-      rows.push(row("Errors (sev 16+)", r.FAILED_JOBS_FAILED || "—", parseInt(r.FAILED_JOBS_FAILED) > 0 ? SEV_COLORS.critical : SEV_COLORS.ok));
-      for (let i = 1; i <= 10; i++) {
+      rows.push(row("Backup failures", r.FAILED_JOBS_FAILED || "0", parseInt(r.FAILED_JOBS_FAILED) > 0 ? SEV_COLORS.critical : SEV_COLORS.ok));
+      rows.push(row("System errors (jobid=0)", r.FAILED_JOBS_SYSTEM_ERRORS || "0", parseInt(r.FAILED_JOBS_SYSTEM_ERRORS) > 50 ? SEV_COLORS.warning : "#556677"));
+      for (let i = 1; i <= 5; i++) {
         const d = r[`FAILED_JOB_DETAIL_${i}`];
-        if (d) rows.push(row(`Detail ${i}`, d, "#ff8899"));
+        if (d) rows.push(row(`Backup fail ${i}`, d, "#ff8899"));
+      }
+      for (let i = 1; i <= 3; i++) {
+        const d = r[`SYSTEM_ERROR_DETAIL_${i}`];
+        if (d) rows.push(row(`Sys error ${i}`, d.trim(), SEV_COLORS.warning));
       }
       break;
     case "HUNG_JOBS":
@@ -252,12 +257,17 @@ function SectionDetail({ data, section }) {
       break;
     }
     case "VAULT_TAPES":
-      rows.push(row("Total media", r.VAULT_TAPES_TOTAL || "—"));
-      rows.push(row("Scratch", r.VAULT_TAPES_SCRATCH || "—", r.VAULT_TAPES_SCRATCH_SEVERITY === "CRITICAL" ? SEV_COLORS.critical : r.VAULT_TAPES_SCRATCH_SEVERITY === "WARNING" ? SEV_COLORS.warning : SEV_COLORS.ok));
-      rows.push(row("Frozen", r.VAULT_TAPES_FROZEN || "0"));
-      rows.push(row("Suspended", r.VAULT_TAPES_SUSPENDED || "0"));
-      rows.push(row("Full", r.VAULT_TAPES_FULL || "0"));
-      rows.push(row("Expired", r.VAULT_TAPES_EXPIRED || "0", parseInt(r.VAULT_TAPES_EXPIRED) > 0 ? SEV_COLORS.warning : "#ddeeff"));
+      if (r.VAULT_TAPES_STATUS === "NA") {
+        rows.push(row("Status", "N/A — No tape library", "#556677"));
+        rows.push(row("Note", r.VAULT_TAPES_MSG || "Data Domain only", "#556677"));
+      } else {
+        rows.push(row("Total media", r.VAULT_TAPES_TOTAL || "—"));
+        rows.push(row("Scratch", r.VAULT_TAPES_SCRATCH || "—", r.VAULT_TAPES_SCRATCH_SEVERITY === "CRITICAL" ? SEV_COLORS.critical : r.VAULT_TAPES_SCRATCH_SEVERITY === "WARNING" ? SEV_COLORS.warning : SEV_COLORS.ok));
+        rows.push(row("Frozen", r.VAULT_TAPES_FROZEN || "0"));
+        rows.push(row("Suspended", r.VAULT_TAPES_SUSPENDED || "0"));
+        rows.push(row("Full", r.VAULT_TAPES_FULL || "0"));
+        rows.push(row("Expired", r.VAULT_TAPES_EXPIRED || "0", parseInt(r.VAULT_TAPES_EXPIRED) > 0 ? SEV_COLORS.warning : "#ddeeff"));
+      }
       break;
     case "DAEMON_HEALTH": {
       const daemons = ["nbemm","nbpem","bprd","bpdbm","bpjobd","nbaudit","vnetd","nbjm","nbrb"];
