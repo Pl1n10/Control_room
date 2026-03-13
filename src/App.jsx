@@ -104,8 +104,8 @@ function getSeverity(data, section) {
     }
     case "DAEMON_HEALTH": {
       const down = parseInt(r.DAEMON_HEALTH_DOWN || "0");
-      const cw = parseInt(r.CLOSEWAIT_1556_COUNT || "0");
-      if (cw > 0) return "critical";
+      const cwSev = r.CLOSEWAIT_1556_SEVERITY || "OK";
+      if (cwSev === "CRITICAL") return "critical";
       if (down > 0) return "critical";
       return "ok";
     }
@@ -186,10 +186,13 @@ function SectionDetail({ data, section }) {
   const rows = [];
   switch (section) {
     case "FAILED_JOBS":
-      rows.push(row("Total jobs", r.FAILED_JOBS_TOTAL || "—"));
+      rows.push(row("Total events", r.FAILED_JOBS_TOTAL || "—"));
       rows.push(row("Successful", r.FAILED_JOBS_SUCCESS || "—", SEV_COLORS.ok));
-      rows.push(row("Partial", r.FAILED_JOBS_PARTIAL || "—", SEV_COLORS.warning));
-      rows.push(row("Failed", r.FAILED_JOBS_FAILED || "—", parseInt(r.FAILED_JOBS_FAILED) > 0 ? SEV_COLORS.critical : SEV_COLORS.ok));
+      rows.push(row("Partial", r.FAILED_JOBS_PARTIAL || "—", parseInt(r.FAILED_JOBS_PARTIAL) > 0 ? SEV_COLORS.warning : "#ddeeff"));
+      if (r.FAILED_JOBS_INFO_EVENTS && parseInt(r.FAILED_JOBS_INFO_EVENTS) > 0) {
+        rows.push(row("Info events (EMM)", r.FAILED_JOBS_INFO_EVENTS, "#556677"));
+      }
+      rows.push(row("Real failures", r.FAILED_JOBS_FAILED || "—", parseInt(r.FAILED_JOBS_FAILED) > 0 ? SEV_COLORS.critical : SEV_COLORS.ok));
       for (let i = 1; i <= 10; i++) {
         const d = r[`FAILED_JOB_DETAIL_${i}`];
         if (d) rows.push(row(`Detail ${i}`, d, "#ff8899"));
@@ -221,7 +224,12 @@ function SectionDetail({ data, section }) {
       for (let i = 1; i <= count; i++) {
         const name = r[`MEDIA_SERVER_${i}_NAME`];
         const st = r[`MEDIA_SERVER_${i}_STATUS`];
-        if (name) rows.push(row(name, st, st === "UP" ? SEV_COLORS.ok : SEV_COLORS.critical));
+        const type = r[`MEDIA_SERVER_${i}_TYPE`] || "";
+        if (!name) continue;
+        const label = type === "DataDomain" ? `${name} (DD)` : name;
+        const col = st === "UP" ? SEV_COLORS.ok : st === "SKIP_DD" ? "#556677" : SEV_COLORS.critical;
+        const display = st === "SKIP_DD" ? "skipped (appliance)" : st;
+        rows.push(row(label, display, col));
       }
       break;
     }
@@ -256,7 +264,14 @@ function SectionDetail({ data, section }) {
           rows.push(row(d, st === "UP" ? `UP (PID ${pid}) — ${started}` : "DOWN", col));
         }
       }
-      rows.push(row("CLOSE-WAIT:1556", r.CLOSEWAIT_1556_COUNT || "0", parseInt(r.CLOSEWAIT_1556_COUNT) > 0 ? SEV_COLORS.critical : SEV_COLORS.ok));
+      rows.push(row("CLOSE-WAIT:1556 (dangerous)", r.CLOSEWAIT_1556_COUNT || "0", parseInt(r.CLOSEWAIT_1556_COUNT) > 0 ? SEV_COLORS.critical : SEV_COLORS.ok));
+      const cwTotal = r.CLOSEWAIT_1556_TOTAL || "0";
+      const cwHarmless = r.CLOSEWAIT_1556_HARMLESS || "0";
+      if (parseInt(cwTotal) > 0) {
+        rows.push(row("CLOSE-WAIT total", cwTotal, "#556677"));
+        rows.push(row("  harmless (nbinlinerwdetect)", cwHarmless, "#556677"));
+      }
+      if (r.CLOSEWAIT_1556_PROCS) rows.push(row("  flagged processes", r.CLOSEWAIT_1556_PROCS, SEV_COLORS.critical));
       break;
     }
     case "SYSTEM":
