@@ -187,12 +187,10 @@ function SectionDetail({ data, section }) {
   switch (section) {
     case "FAILED_JOBS":
       rows.push(row("Total events", r.FAILED_JOBS_TOTAL || "—"));
-      rows.push(row("Successful", r.FAILED_JOBS_SUCCESS || "—", SEV_COLORS.ok));
-      rows.push(row("Partial", r.FAILED_JOBS_PARTIAL || "—", parseInt(r.FAILED_JOBS_PARTIAL) > 0 ? SEV_COLORS.warning : "#ddeeff"));
-      if (r.FAILED_JOBS_INFO_EVENTS && parseInt(r.FAILED_JOBS_INFO_EVENTS) > 0) {
-        rows.push(row("Info events (EMM)", r.FAILED_JOBS_INFO_EVENTS, "#556677"));
-      }
-      rows.push(row("Real failures", r.FAILED_JOBS_FAILED || "—", parseInt(r.FAILED_JOBS_FAILED) > 0 ? SEV_COLORS.critical : SEV_COLORS.ok));
+      rows.push(row("Successful (sev 0)", r.FAILED_JOBS_SUCCESS || "—", SEV_COLORS.ok));
+      rows.push(row("Info (sev 2-4)", r.FAILED_JOBS_INFO || r.FAILED_JOBS_INFO_EVENTS || "—", "#556677"));
+      rows.push(row("Warning (sev 8)", r.FAILED_JOBS_WARNING || r.FAILED_JOBS_PARTIAL || "—", parseInt(r.FAILED_JOBS_WARNING || r.FAILED_JOBS_PARTIAL || "0") > 0 ? SEV_COLORS.warning : "#ddeeff"));
+      rows.push(row("Errors (sev 16+)", r.FAILED_JOBS_FAILED || "—", parseInt(r.FAILED_JOBS_FAILED) > 0 ? SEV_COLORS.critical : SEV_COLORS.ok));
       for (let i = 1; i <= 10; i++) {
         const d = r[`FAILED_JOB_DETAIL_${i}`];
         if (d) rows.push(row(`Detail ${i}`, d, "#ff8899"));
@@ -226,9 +224,10 @@ function SectionDetail({ data, section }) {
         const st = r[`MEDIA_SERVER_${i}_STATUS`];
         const type = r[`MEDIA_SERVER_${i}_TYPE`] || "";
         if (!name) continue;
-        const label = type === "DataDomain" ? `${name} (DD)` : name;
-        const col = st === "UP" ? SEV_COLORS.ok : st === "SKIP_DD" ? "#556677" : SEV_COLORS.critical;
-        const display = st === "SKIP_DD" ? "skipped (appliance)" : st;
+        const isSkip = st && st.startsWith("SKIP");
+        const label = type === "NDMP" ? `${name} (NDMP)` : type === "server" || type === "cluster" ? `${name} (${type})` : name;
+        const col = st === "UP" ? SEV_COLORS.ok : isSkip ? "#556677" : SEV_COLORS.critical;
+        const display = st === "SKIP_NDMP" ? "skipped (NDMP appliance)" : st === "SKIP_MASTER" ? "skipped (master/cluster)" : st === "SKIP_DD" ? "skipped (appliance)" : st;
         rows.push(row(label, display, col));
       }
       break;
