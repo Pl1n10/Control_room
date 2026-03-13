@@ -5,7 +5,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 function stripRtf(rtf) {
   if (!rtf.trimStart().startsWith("{\\rtf")) return rtf;
   let t = rtf;
-  // Rimuovi tabelle font/colore/stile
+  // Rimuovi tabelle font/colore/stile (blocchi annidati)
   t = t.replace(/\{\\fonttbl[\s\S]*?\}/g, "");
   t = t.replace(/\{\\colortbl[\s\S]*?\}/g, "");
   t = t.replace(/\{\\stylesheet[\s\S]*?\}/g, "");
@@ -15,13 +15,20 @@ function stripRtf(rtf) {
   t = t.replace(/\\par[d]?\s?/g, "\n");
   t = t.replace(/\\line\s?/g, "\n");
   t = t.replace(/\\tab\s?/g, "\t");
-  // Rimuovi control word RTF (\word123)
-  t = t.replace(/\\[a-z]+[-]?\d*\s?/gi, "");
+  // Rimuovi control word RTF — ANCHE quando attaccati senza spazio (es. valore\cf1\highlight2)
+  // Match backslash + letters + optional negative number + optional single trailing space
+  // Run multiple passes to catch chained codes like \cf1\highlight2
+  for (let i = 0; i < 3; i++) {
+    t = t.replace(/\\[a-z]+[-]?\d*\s?/gi, "");
+  }
   // Rimuovi graffe residue
   t = t.replace(/[{}]/g, "");
   // Decode \'xx hex escapes
   t = t.replace(/\\'([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
-  // Pulisci righe vuote multiple
+  // Rimuovi unicode RTF escapes \uNNNN?
+  t = t.replace(/\\u-?\d+\?/g, "");
+  // Pulisci righe vuote multiple e trailing whitespace per riga
+  t = t.split("\n").map(l => l.trimEnd()).join("\n");
   t = t.replace(/\n{3,}/g, "\n\n").trim();
   return t;
 }
