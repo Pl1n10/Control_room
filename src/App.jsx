@@ -560,13 +560,35 @@ export default function App() {
     for (const file of files) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        const text = e.target.result;
-        const data = parseReport(text);
-        const hostname = data._meta.MASTER_HOSTNAME || file.name.replace(/\.[^.]+$/, "");
+        const rawText = e.target.result;
+        // Strip RTF once for the whole file
+        const cleanText = stripRtf(rawText);
+
+        // Split multi-report files (from nbu_morningcheck_all.sh)
+        // Separator: ===MASTER_REPORT===
+        let chunks;
+        if (cleanText.includes("===MASTER_REPORT===")) {
+          chunks = cleanText.split("===MASTER_REPORT===").filter(c => c.trim().length > 0 && c.includes("REPORT_VERSION"));
+        } else {
+          chunks = [cleanText];
+        }
+
+        const newReports = [];
+        for (const chunk of chunks) {
+          const data = parseReport(chunk);
+          if (!data._meta.REPORT_VERSION) continue; // skip empty chunks
+          const hostname = data._meta.MASTER_HOSTNAME || file.name.replace(/\.[^.]+$/, "");
+          newReports.push({ filename: file.name, data, text: chunk });
+        }
+
         setReports(prev => {
-          // Replace if same hostname exists
-          const filtered = prev.filter(r => (r.data._meta.MASTER_HOSTNAME || r.filename) !== hostname);
-          return [...filtered, { filename: file.name, data, text }].sort((a, b) => {
+          let updated = [...prev];
+          for (const nr of newReports) {
+            const hn = nr.data._meta.MASTER_HOSTNAME || nr.filename;
+            updated = updated.filter(r => (r.data._meta.MASTER_HOSTNAME || r.filename) !== hn);
+            updated.push(nr);
+          }
+          return updated.sort((a, b) => {
             const ha = a.data._meta.MASTER_HOSTNAME || a.filename;
             const hb = b.data._meta.MASTER_HOSTNAME || b.filename;
             return ha.localeCompare(hb);
