@@ -65,7 +65,7 @@ function getSeverity(data, section) {
       return "ok";
     case "MEDIA_SERVERS":
       if (r.MEDIA_SERVERS_STATUS === "ERROR") return "error";
-      if (parseInt(r.MEDIA_SERVERS_DOWN || "0") > 0) return "critical";
+      if (parseInt(r.MEDIA_SERVERS_DOWN || "0") > 0) return "warning";
       return "ok";
     case "CERTIFICATES":
       if (r.CERTIFICATES_STATUS === "ERROR") return "error";
@@ -177,15 +177,17 @@ function SectionDetail({ data, section }) {
     }
     case "MEDIA_SERVERS": {
       const count=parseInt(r.MEDIA_SERVERS_COUNT||"0");
+      const inactive=parseInt(r.MEDIA_SERVERS_DOWN||"0");
+      const jobBased=r.MEDIA_SERVERS_CHECK==="job-based-24h";
       rows.push(row("Total", count));
-      rows.push(row("Down", r.MEDIA_SERVERS_DOWN||"0", parseInt(r.MEDIA_SERVERS_DOWN)>0?"critical":"ok"));
+      rows.push(row(jobBased?"Inactive (no jobs 24h)":"Down", inactive, inactive>0?"warning":"ok"));
       for (let i=1;i<=count;i++) {
         const name=r[`MEDIA_SERVER_${i}_NAME`]; const st=r[`MEDIA_SERVER_${i}_STATUS`]; const type=r[`MEDIA_SERVER_${i}_TYPE`]||"";
         if(!name) continue;
         const isSkip=st&&st.startsWith("SKIP");
         const label=type?`${name} (${type})`:name;
-        const display=st==="SKIP_NDMP"?"skipped (NDMP)":st==="SKIP_MASTER"?"skipped (master)":st==="SKIP_DD"?"skipped (appliance)":st;
-        rows.push(row(label,display,st==="UP"?"ok":isSkip?null:"critical"));
+        const display=st==="SKIP_NDMP"?"skipped (NDMP)":st==="SKIP_MASTER"?"skipped (master)":st==="SKIP_DD"?"skipped (appliance)":st==="WARNING"?"no jobs 24h":st;
+        rows.push(row(label,display,st==="UP"?"ok":isSkip?null:st==="WARNING"?"warning":"critical"));
       }
       break;
     }
